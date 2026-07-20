@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Sentinel anticipatory action dashboard for Karamoja." />
+    <title>Sentinel | Anticipatory Action Copilot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
+    <header class="border-b border-slate-800 bg-slate-950/95 px-4 py-4 sm:px-6 lg:px-8">
+      <div class="mx-auto flex max-w-screen-2xl flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div class="flex items-start gap-3">
+          <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-teal-500/15 text-xl text-teal-300" aria-hidden="true">◈</div>
+          <div>
+            <h1 class="text-xl font-semibold tracking-tight text-white sm:text-2xl">SENTINEL <span class="font-normal text-slate-400">— Early Warning &amp; Anticipatory Action Copilot</span></h1>
+            <p class="mt-1 text-sm text-slate-400">IGAD / ICPAC Region Pilot: Karamoja, Uganda (OND Season Forecast)</p>
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <div id="api-status" class="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-300" role="status">
+            <span class="h-2 w-2 rounded-full bg-slate-500"></span><span>Checking API…</span>
+          </div>
+          <button id="audit-button" class="rounded-lg border border-teal-400/40 bg-teal-400/10 px-4 py-2 text-sm font-medium text-teal-200 transition hover:bg-teal-400/20">View Audit Trail &amp; Execution Log</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="mx-auto grid max-w-screen-2xl gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(390px,0.95fr)] lg:p-8">
+      <section class="panel flex min-h-[590px] flex-col overflow-hidden" aria-label="District risk map">
+        <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800 px-5 py-4">
+          <div>
+            <p class="eyebrow">Geospatial overview</p>
+            <h2 class="mt-1 text-lg font-semibold text-white">Karamoja district trigger map</h2>
+          </div>
+          <div class="flex items-center gap-4 text-xs text-slate-400">
+            <span class="inline-flex items-center gap-1.5"><i class="h-2.5 w-2.5 rounded-full bg-red-500"></i>Activated ≥ 15.2%</span>
+            <span class="inline-flex items-center gap-1.5"><i class="h-2.5 w-2.5 rounded-full bg-emerald-500"></i>Watch</span>
+          </div>
+        </div>
+        <div id="map" class="min-h-[500px] flex-1" aria-label="Interactive map of Karamoja districts"></div>
+        <p class="border-t border-slate-800 px-5 py-3 text-xs text-slate-500">Click a district to generate role-specific anticipatory action briefs.</p>
+      </section>
+
+      <section class="panel flex min-h-[590px] flex-col" aria-labelledby="decision-heading">
+        <div class="flex items-start justify-between gap-3 border-b border-slate-800 px-5 py-4">
+          <div><p class="eyebrow">Decision engine</p><h2 id="decision-heading" class="mt-1 text-lg font-semibold text-white">Action briefs</h2></div>
+          <button id="export-brief" class="hidden rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-teal-400/50 hover:text-teal-200">Export Action Brief (PDF)</button>
+        </div>
+        <div id="district-overview" class="border-b border-slate-800 px-5 py-4">
+          <p class="text-sm text-slate-400">Select a district on the map to assess the trigger and generate decision briefs.</p>
+        </div>
+        <div id="briefs-content" class="flex-1 overflow-y-auto p-5">
+          <div class="empty-state"><span class="text-3xl">◌</span><p>Awaiting district selection</p><span>Operational recommendations will appear here.</span></div>
+        </div>
+      </section>
+    </main>
+
+    <div id="audit-modal" class="fixed inset-0 z-40 hidden" aria-hidden="true">
+      <div id="audit-backdrop" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"></div>
+      <section class="absolute inset-x-0 bottom-0 mx-auto max-h-[82vh] max-w-screen-2xl rounded-t-2xl border border-slate-700 bg-slate-900 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="audit-title">
+        <div class="flex items-center justify-between border-b border-slate-800 px-5 py-4 sm:px-6">
+          <div><p class="eyebrow">Accountability log</p><h2 id="audit-title" class="mt-1 text-lg font-semibold text-white">Action execution trail</h2></div>
+          <button id="audit-close" class="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Close audit log">✕</button>
+        </div>
+        <div class="overflow-auto px-5 py-4 sm:px-6">
+          <div id="audit-kpis" class="mb-5 grid gap-3 sm:grid-cols-2"></div>
+          <table class="w-full min-w-[760px] text-left text-sm">
+            <thead class="text-xs uppercase tracking-wider text-slate-500"><tr><th class="pb-3 pr-4">Timestamp</th><th class="pb-3 pr-4">District</th><th class="pb-3 pr-4">Role</th><th class="pb-3 pr-4">Action taken</th><th class="pb-3">Status</th></tr></thead>
+            <tbody id="audit-table" class="divide-y divide-slate-800 text-slate-300"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div id="toast" class="pointer-events-none fixed bottom-5 right-5 z-50 hidden rounded-lg border px-4 py-3 text-sm shadow-xl" role="status"></div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="runtime-config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

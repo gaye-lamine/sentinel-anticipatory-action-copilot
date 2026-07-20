@@ -1,0 +1,6 @@
+[build]
+  publish = "frontend"
+  command = "printf 'window.SENTINEL_API_BASE = \"%s\";\n' \"$SENTINEL_API_BASE\" > frontend/runtime-config.js"
+
+[build.environment]
+  SENTINEL_API_BASE = "https://api.sentinel.backnd-api.cloud/api/v1"

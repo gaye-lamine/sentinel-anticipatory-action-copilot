@@ -1,0 +1,90 @@
+name: Sentinel CI/CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sentinel-production
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate application
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt
+      - name: Validate backend modules
+        run: python -m compileall -q backend
+      - name: Validate frontend JavaScript
+        run: node --check frontend/app.js
+
+  deploy-backend:
+    name: Deploy backend to VPS
+    needs: validate
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Transfer backend release files
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          source: "backend,run-test,karamoja_9_districts.geojson,docker-compose.yml,.dockerignore"
+          target: "/opt/sentinel"
+      - name: Build, restart, and verify Sentinel
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            set -eu
+            test -f /opt/sentinel/backend/.env
+            mkdir -p /opt/sentinel/data
+            cd /opt/sentinel
+            docker compose up -d --build
+            for attempt in 1 2 3 4 5; do
+              if curl --fail --silent http://127.0.0.1:8084/api/v1/health; then
+                exit 0
+              fi
+              sleep 4
+            done
+            docker compose ps
+            docker compose logs --tail=100 sentinel-backend
+            exit 1
+
+  deploy-frontend:
+    name: Deploy frontend to Netlify
+    needs: [validate, deploy-backend]
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure production API endpoint
+        run: printf 'window.SENTINEL_API_BASE = "%s";\n' "$SENTINEL_API_BASE" > frontend/runtime-config.js
+        env:
+          SENTINEL_API_BASE: ${{ secrets.SENTINEL_API_BASE }}
+      - name: Deploy production site
+        uses: nwtgck/actions-netlify@v3.0
+        with:
+          publish-dir: "./frontend"
+          production-deploy: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          deploy-message: "Sentinel deployment ${{ github.sha }}"
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}

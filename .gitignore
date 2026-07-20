@@ -1,0 +1,13 @@
+# Secrets
+backend/.env
+
+# Runtime data
+backend/sentinel.db
+data/
+Sentinel-Submission-Package.zip
+
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/

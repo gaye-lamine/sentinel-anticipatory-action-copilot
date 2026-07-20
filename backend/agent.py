@@ -1,0 +1,106 @@
+"""Gemini-powered decision briefs for Sentinel's anticipatory-action workflow."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+from typing import List
+
+from dotenv import load_dotenv
+from google import genai
+from google.genai import types
+from pydantic import BaseModel, Field
+
+
+TRIGGER_THRESHOLD = 15.2
+SYSTEM_PROMPT = """You are SENTINEL, an expert Anticipatory Action Decision Engine
+specialized in East African climate hazards (ASAL region, Karamoja).
+Your job is to translate drought probability triggers into role-specific operational briefs.
+DO NOT give generic climate summaries. Give concrete, role-tailored actions with explicit
+confidence scores and conditionality. Use actions appropriate to ASAL standard operating
+procedures and avoid claiming that an action has already been executed."""
+
+
+class ActionBrief(BaseModel):
+    role: str = Field(
+        description="Ex: County Drought Coordinator, Water Committee, Community Health Officer"
+    )
+    priority: str = Field(description="CRITICAL, HIGH, MEDIUM, LOW")
+    recommended_action: str = Field(
+        description="Concrete operational step based on ASAL Standard Operating Procedures"
+    )
+    confidence_score: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="Confidence value between 0.0 and 1.0 regarding trigger necessity",
+    )
+    confidence_rationale: str = Field(
+        description="Why this action is needed and what field observation would alter this decision"
+    )
+    key_bottlenecks: List[str] = Field(description="Key operational or resource risks")
+
+
+class DistrictBriefResponse(BaseModel):
+    district_name: str
+    drought_probability: float
+    trigger_status: str
+    briefs: List[ActionBrief]
+
+
+class GeminiConfigurationError(RuntimeError):
+    """Raised when the Gemini service is not configured."""
+
+
+class GeminiGenerationError(RuntimeError):
+    """Raised when Gemini cannot return a valid structured brief."""
+
+
+def _get_client() -> genai.Client:
+    load_dotenv(Path(__file__).with_name(".env"))
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise GeminiConfigurationError("GEMINI_API_KEY is not configured.")
+    return genai.Client(api_key=api_key)
+
+
+def generate_decision_briefs(
+    district_name: str, drought_prob: float, roles: List[str]
+) -> DistrictBriefResponse:
+    """Generate native-schema Gemini briefs from a live ICPAC district probability."""
+    trigger_status = "ACTIVATED" if drought_prob >= TRIGGER_THRESHOLD else "WATCH"
+    requested_roles = ", ".join(roles)
+    user_prompt = f"""Generate exactly one decision brief for each requested role.
+
+District: {district_name}
+Drought probability: {drought_prob:.1f}%
+Official trigger threshold: {TRIGGER_THRESHOLD:.1f}%
+Trigger status: {trigger_status}
+Requested roles: {requested_roles}
+For ACTIVATED, specify time-bound anticipatory actions. For WATCH, specify proportionate
+
+preparedness and field validation actions. State what observation could change the decision.
+    Return only the structured response matching the provided schema."""
+
+    try:
+        # Keep the SDK client alive for the complete request. Calling through a
+        # temporary client can close its underlying HTTP connection too early.
+        client = _get_client()
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=user_prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                response_mime_type="application/json",
+                response_schema=DistrictBriefResponse,
+            ),
+        )
+        if response.parsed is not None:
+            return DistrictBriefResponse.model_validate(response.parsed)
+        if response.text:
+            return DistrictBriefResponse.model_validate_json(response.text)
+    except GeminiConfigurationError:
+        raise
+    except Exception as exc:
+        raise GeminiGenerationError("Gemini failed to generate a valid decision brief.") from exc
+
+    raise GeminiGenerationError("Gemini returned no structured decision brief.")

@@ -1,0 +1,12 @@
+.git/
+.agents/
+.codex/
+.venv/
+venv/
+**/__pycache__/
+**/.pytest_cache/
+**/node_modules/
+backend/.env
+backend/sentinel.db
+data/
+Sentinel-Submission-Package.zip
