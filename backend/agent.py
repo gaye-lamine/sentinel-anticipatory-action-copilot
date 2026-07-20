@@ -11,8 +11,11 @@ from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
 
+from .confidence import calculate_trigger_confidence
+
 
 TRIGGER_THRESHOLD = 15.2
+CONFIDENCE_TOLERANCE = 0.01
 SYSTEM_PROMPT = """You are SENTINEL, an expert Anticipatory Action Decision Engine
 specialized in East African climate hazards (ASAL region, Karamoja).
 Your job is to translate drought probability triggers into role-specific operational briefs.
@@ -68,6 +71,7 @@ def generate_decision_briefs(
 ) -> DistrictBriefResponse:
     """Generate native-schema Gemini briefs from a live ICPAC district probability."""
     trigger_status = "ACTIVATED" if drought_prob >= TRIGGER_THRESHOLD else "WATCH"
+    computed_confidence = calculate_trigger_confidence(drought_prob, TRIGGER_THRESHOLD)
     requested_roles = ", ".join(roles)
     user_prompt = f"""Generate exactly one decision brief for each requested role.
 
@@ -75,11 +79,19 @@ District: {district_name}
 Drought probability: {drought_prob:.1f}%
 Official trigger threshold: {TRIGGER_THRESHOLD:.1f}%
 Trigger status: {trigger_status}
+Precomputed trigger confidence: {computed_confidence:.2f}
 Requested roles: {requested_roles}
-For ACTIVATED, specify time-bound anticipatory actions. For WATCH, specify proportionate
 
+IMPORTANT: The trigger confidence value above is already computed deterministically
+from the statistical margin between the forecast probability and the activation
+threshold. You MUST use this exact value ({computed_confidence:.2f}) as
+confidence_score in your response for every role. Do not recalculate, adjust,
+or invent a different confidence value. Your role is only to explain WHY this
+confidence level makes sense given the data, in the rationale field.
+
+For ACTIVATED, specify time-bound anticipatory actions. For WATCH, specify proportionate
 preparedness and field validation actions. State what observation could change the decision.
-    Return only the structured response matching the provided schema."""
+Return only the structured response matching the provided schema."""
 
     try:
         # Keep the SDK client alive for the complete request. Calling through a
@@ -95,12 +107,20 @@ preparedness and field validation actions. State what observation could change t
             ),
         )
         if response.parsed is not None:
-            return DistrictBriefResponse.model_validate(response.parsed)
-        if response.text:
-            return DistrictBriefResponse.model_validate_json(response.text)
+            result = DistrictBriefResponse.model_validate(response.parsed)
+        elif response.text:
+            result = DistrictBriefResponse.model_validate_json(response.text)
+        else:
+            raise GeminiGenerationError("Gemini returned no structured decision brief.")
+
+        for brief in result.briefs:
+            if abs(brief.confidence_score - computed_confidence) > CONFIDENCE_TOLERANCE:
+                brief.confidence_score = computed_confidence
+            else:
+                # Normalize tolerated floating-point variance to the exact deterministic value.
+                brief.confidence_score = computed_confidence
+        return result
     except GeminiConfigurationError:
         raise
     except Exception as exc:
         raise GeminiGenerationError("Gemini failed to generate a valid decision brief.") from exc
-
-    raise GeminiGenerationError("Gemini returned no structured decision brief.")
