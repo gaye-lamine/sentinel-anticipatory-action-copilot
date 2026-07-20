@@ -30,9 +30,6 @@ In **Settings → Secrets and variables → Actions**, add these repository secr
 | `VPS_USER` | VPS deployment user |
 | `VPS_PORT` | `22` unless SSH uses another port |
 | `VPS_SSH_KEY` | private key for the deployment user |
-| `NETLIFY_AUTH_TOKEN` | Netlify personal access token |
-| `NETLIFY_SITE_ID` | Netlify site ID |
-| `SENTINEL_API_BASE` | `https://api.sentinel.backnd-api.cloud/api/v1` |
 
 Add the repository variable `DEPLOY_ENABLED` with the value `true` only after the preceding secrets, VPS setup, DNS, Nginx and TLS are ready.
 
@@ -42,4 +39,16 @@ With `DEPLOY_ENABLED` still unset, run the backend one time from `/opt/sentinel`
 
 ## Continuous delivery
 
-Thereafter, each push to `main` performs validation, releases the Docker backend to `/opt/sentinel`, checks `/api/v1/health`, and publishes the frontend to Netlify.
+Thereafter, each push to `main` performs validation, releases the Docker backend to `/opt/sentinel`, and checks `/api/v1/health`.
+
+## Netlify continuous deployment
+
+Connect the GitHub repository directly to Netlify. Netlify then publishes `/frontend` automatically on each push using `netlify.toml`; no Netlify token or site ID is required in GitHub Actions.
+
+In Netlify **Site configuration → Environment variables**, create:
+
+| Variable | Value |
+| --- | --- |
+| `SENTINEL_API_BASE` | `https://api.sentinel.backnd-api.cloud/api/v1` |
+
+The Netlify build writes this value into `frontend/runtime-config.js` before publishing.
