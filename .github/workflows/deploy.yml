@@ -55,6 +55,7 @@ jobs:
             set -eu
             test -f /opt/sentinel/backend/.env
             mkdir -p /opt/sentinel/data
+            chown -R 10001:10001 /opt/sentinel/data
             cd /opt/sentinel
             docker compose up -d --build
             for attempt in 1 2 3 4 5; do
