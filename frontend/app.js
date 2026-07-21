@@ -17,18 +17,39 @@ function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#039;", '"': "&quot;" }[character]));
 }
 
-async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, { headers: { "Content-Type": "application/json" }, ...options });
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.detail || `Request failed (${response.status})`);
+async function request(path, options = {}, timeoutMs = 20000) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${API_BASE}${path}`, { headers: { "Content-Type": "application/json" }, signal: controller.signal, ...options });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      const error = new Error(payload.detail || `Request failed (${response.status})`);
+      error.status = response.status;
+      throw error;
+    }
+    return await response.json();
+  } catch (error) {
+    if (error.name === "AbortError") throw new Error("Request timed out after 20 seconds. Please try again.");
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
   }
-  return response.json();
 }
 
 function setApiStatus(connected, message) {
   elements.apiStatus.className = `inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm ${connected ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200" : "border-red-400/30 bg-red-400/10 text-red-200"}`;
   elements.apiStatus.innerHTML = `<span class="h-2 w-2 rounded-full ${connected ? "bg-emerald-400" : "bg-red-400"}"></span><span>${escapeHtml(message)}</span>`;
+}
+
+function updateApiStatusForError(error) {
+  if (error.message === "Gemini is not configured. Set GEMINI_API_KEY.") {
+    setApiStatus(true, "Gemini degraded");
+    return;
+  }
+  if (error.status >= 500 || error.message === "Failed to fetch" || error.message.startsWith("Request timed out")) {
+    setApiStatus(false, "API unavailable");
+  }
 }
 
 function mapStyle(feature) {
@@ -107,6 +128,7 @@ async function selectDistrict(districtName, layer) {
     const briefs = await request("/agent/generate-briefs", { method: "POST", body: JSON.stringify({ district_name: district.district_name }) });
     renderBriefs(briefs);
   } catch (error) {
+    updateApiStatusForError(error);
     elements.briefs.innerHTML = `<div class="empty-state"><span class="text-3xl text-red-400">!</span><p>Could not generate decision briefs</p><span>${escapeHtml(error.message)}</span></div>`;
   }
 }
@@ -148,7 +170,7 @@ async function loadAuditLogs() {
     const activatedCovered = [...new Set(logs.map((log) => log.district_name).filter((name) => state.statusByDistrict.get(name)?.status === "ACTIVATED"))];
     elements.auditKpis.innerHTML = `<div class="rounded-lg border border-slate-700 bg-slate-800/70 p-3"><p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Actions Logged</p><p class="mt-1 text-2xl font-semibold text-teal-200">${logs.length}</p></div><div class="rounded-lg border border-slate-700 bg-slate-800/70 p-3"><p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Activated Districts Covered</p><p class="mt-1 text-lg font-semibold text-emerald-200">${activatedCovered.length ? activatedCovered.map(escapeHtml).join(", ") : "None yet"}</p></div>`;
     elements.auditTable.innerHTML = logs.length ? logs.map(renderAuditLog).join("") : `<div class="py-12 text-center text-slate-500">No execution records yet.</div>`;
-  } catch (error) { elements.auditKpis.innerHTML = ""; elements.auditTable.innerHTML = `<div class="py-12 text-center text-red-300">Unable to load audit logs: ${escapeHtml(error.message)}</div>`; }
+  } catch (error) { updateApiStatusForError(error); elements.auditKpis.innerHTML = ""; elements.auditTable.innerHTML = `<div class="py-12 text-center text-red-300">Unable to load audit logs: ${escapeHtml(error.message)}</div>`; }
 }
 
 async function exportBriefPdf() {
