@@ -129,13 +129,26 @@ async function confirmAction(brief, button) {
 
 function formatTime(timestamp) { return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(timestamp)); }
 
+function auditRoleVisual(role) {
+  const normalizedRole = role.toLowerCase();
+  if (normalizedRole.includes("coordinator")) return { initial: "C", label: "Coordinator", tone: "border-red-400/30 bg-red-500/15 text-red-300" };
+  if (normalizedRole.includes("water")) return { initial: "W", label: "Water", tone: "border-orange-400/30 bg-orange-500/15 text-orange-300" };
+  if (normalizedRole.includes("health")) return { initial: "H", label: "Health", tone: "border-amber-300/30 bg-amber-400/15 text-amber-200" };
+  return { initial: "A", label: "Action", tone: "border-teal-400/30 bg-teal-400/15 text-teal-200" };
+}
+
+function renderAuditLog(log) {
+  const roleVisual = auditRoleVisual(log.role);
+  return `<article class="brief-card rounded-xl p-4 sm:p-5"><div class="flex flex-wrap items-start justify-between gap-3"><div class="flex min-w-0 items-center gap-3"><span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${roleVisual.tone}" aria-label="${roleVisual.label} role">${roleVisual.initial}</span><div class="min-w-0"><p class="text-xs font-semibold uppercase tracking-wider text-slate-500">${escapeHtml(roleVisual.label)} action</p><h3 class="mt-0.5 font-semibold text-white">${escapeHtml(log.role)}</h3></div></div><span class="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-bold text-emerald-300">${escapeHtml(log.status)}</span></div><p class="mt-4 text-sm leading-6 text-slate-300">${escapeHtml(log.action_taken)}</p><div class="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-800 pt-3 text-xs text-slate-500"><span class="font-medium text-slate-400">${escapeHtml(log.district_name)}</span><span aria-hidden="true">•</span><time>${escapeHtml(formatTime(log.timestamp))}</time></div></article>`;
+}
+
 async function loadAuditLogs() {
   try {
     const logs = await request("/audit/logs");
     const activatedCovered = [...new Set(logs.map((log) => log.district_name).filter((name) => state.statusByDistrict.get(name)?.status === "ACTIVATED"))];
     elements.auditKpis.innerHTML = `<div class="rounded-lg border border-slate-700 bg-slate-800/70 p-3"><p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Actions Logged</p><p class="mt-1 text-2xl font-semibold text-teal-200">${logs.length}</p></div><div class="rounded-lg border border-slate-700 bg-slate-800/70 p-3"><p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Activated Districts Covered</p><p class="mt-1 text-lg font-semibold text-emerald-200">${activatedCovered.length ? activatedCovered.map(escapeHtml).join(", ") : "None yet"}</p></div>`;
-    elements.auditTable.innerHTML = logs.length ? logs.map((log) => `<tr><td class="whitespace-nowrap py-3 pr-4 text-slate-400">${formatTime(log.timestamp)}</td><td class="py-3 pr-4 font-medium text-slate-200">${escapeHtml(log.district_name)}</td><td class="py-3 pr-4">${escapeHtml(log.role)}</td><td class="max-w-md py-3 pr-4 text-slate-400">${escapeHtml(log.action_taken)}</td><td class="py-3"><span class="rounded-full bg-emerald-500/15 px-2 py-1 text-xs font-bold text-emerald-300">${escapeHtml(log.status)}</span></td></tr>`).join("") : `<tr><td colspan="5" class="py-12 text-center text-slate-500">No execution records yet.</td></tr>`;
-  } catch (error) { elements.auditKpis.innerHTML = ""; elements.auditTable.innerHTML = `<tr><td colspan="5" class="py-12 text-center text-red-300">Unable to load audit logs: ${escapeHtml(error.message)}</td></tr>`; }
+    elements.auditTable.innerHTML = logs.length ? logs.map(renderAuditLog).join("") : `<div class="py-12 text-center text-slate-500">No execution records yet.</div>`;
+  } catch (error) { elements.auditKpis.innerHTML = ""; elements.auditTable.innerHTML = `<div class="py-12 text-center text-red-300">Unable to load audit logs: ${escapeHtml(error.message)}</div>`; }
 }
 
 async function exportBriefPdf() {
