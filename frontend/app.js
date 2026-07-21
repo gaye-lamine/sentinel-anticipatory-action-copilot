@@ -131,10 +131,10 @@ function formatTime(timestamp) { return new Intl.DateTimeFormat(undefined, { dat
 
 function auditRoleVisual(role) {
   const normalizedRole = role.toLowerCase();
-  if (normalizedRole.includes("coordinator")) return { initial: "C", label: "Coordinator", tone: "border-red-400/30 bg-red-500/15 text-red-300" };
-  if (normalizedRole.includes("water")) return { initial: "W", label: "Water", tone: "border-orange-400/30 bg-orange-500/15 text-orange-300" };
-  if (normalizedRole.includes("health")) return { initial: "H", label: "Health", tone: "border-amber-300/30 bg-amber-400/15 text-amber-200" };
-  return { initial: "A", label: "Action", tone: "border-teal-400/30 bg-teal-400/15 text-teal-200" };
+  if (normalizedRole.includes("coordinator")) return { initial: "C", label: "Coordinator", tone: "audit-role-coordinator" };
+  if (normalizedRole.includes("water")) return { initial: "W", label: "Water", tone: "audit-role-water" };
+  if (normalizedRole.includes("health")) return { initial: "H", label: "Health", tone: "audit-role-health" };
+  return { initial: "A", label: "Action", tone: "audit-role-default" };
 }
 
 function renderAuditLog(log) {

@@ -12,6 +12,9 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
 .empty-state span:last-child { font-size: 0.8rem; color: rgb(100 116 139); }
 .brief-card { border: 1px solid rgb(51 65 85); background: rgb(15 23 42); }
 .brief-card + .brief-card { margin-top: 0.9rem; }
+.audit-role-coordinator { border-color: rgb(248 113 113 / 0.55); background: rgb(239 68 68 / 0.18); color: rgb(252 165 165); }
+.audit-role-water, .audit-role-health { border-color: rgb(251 146 60 / 0.55); background: rgb(249 115 22 / 0.18); color: rgb(254 215 170); }
+.audit-role-default { border-color: rgb(45 212 191 / 0.45); background: rgb(45 212 191 / 0.15); color: rgb(153 246 228); }
 .accordion-summary { cursor: pointer; list-style: none; }
 .accordion-summary::-webkit-details-marker { display: none; }
 .accordion-summary::after { content: "+"; float: right; font-size: 1.2rem; line-height: 0.8rem; color: rgb(45 212 191); }
