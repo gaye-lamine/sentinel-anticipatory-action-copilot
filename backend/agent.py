@@ -12,10 +12,10 @@ from google.genai import types
 from pydantic import BaseModel, Field
 
 from .confidence import calculate_trigger_confidence
+from .priority import allowed_priorities_for_status, constrain_priority
 
 
 TRIGGER_THRESHOLD = 15.2
-CONFIDENCE_TOLERANCE = 0.01
 SYSTEM_PROMPT = """You are SENTINEL, an expert Anticipatory Action Decision Engine
 specialized in East African climate hazards (ASAL region, Karamoja).
 Your job is to translate drought probability triggers into role-specific operational briefs.
@@ -72,6 +72,7 @@ def generate_decision_briefs(
     """Generate native-schema Gemini briefs from a live ICPAC district probability."""
     trigger_status = "ACTIVATED" if drought_prob >= TRIGGER_THRESHOLD else "WATCH"
     computed_confidence = calculate_trigger_confidence(drought_prob, TRIGGER_THRESHOLD)
+    allowed_priorities = ", ".join(sorted(allowed_priorities_for_status(trigger_status)))
     requested_roles = ", ".join(roles)
     user_prompt = f"""Generate exactly one decision brief for each requested role.
 
@@ -80,6 +81,7 @@ Drought probability: {drought_prob:.1f}%
 Official trigger threshold: {TRIGGER_THRESHOLD:.1f}%
 Trigger status: {trigger_status}
 Precomputed trigger confidence: {computed_confidence:.2f}
+Allowed priority values for this trigger status: {allowed_priorities}
 Requested roles: {requested_roles}
 
 IMPORTANT: The trigger confidence value above is already computed deterministically
@@ -88,6 +90,11 @@ threshold. You MUST use this exact value ({computed_confidence:.2f}) as
 confidence_score in your response for every role. Do not recalculate, adjust,
 or invent a different confidence value. Your role is only to explain WHY this
 confidence level makes sense given the data, in the rationale field.
+
+IMPORTANT: Priority is constrained by the trigger status. For this {trigger_status}
+district, you MUST use only one of: {allowed_priorities}. Do not use any other
+priority value. In particular, WATCH districts must never receive HIGH or CRITICAL,
+and ACTIVATED districts must never receive MEDIUM or LOW.
 
 For ACTIVATED, specify time-bound anticipatory actions. For WATCH, specify proportionate
 preparedness and field validation actions. State what observation could change the decision.
@@ -114,11 +121,9 @@ Return only the structured response matching the provided schema."""
             raise GeminiGenerationError("Gemini returned no structured decision brief.")
 
         for brief in result.briefs:
-            if abs(brief.confidence_score - computed_confidence) > CONFIDENCE_TOLERANCE:
-                brief.confidence_score = computed_confidence
-            else:
-                # Normalize tolerated floating-point variance to the exact deterministic value.
-                brief.confidence_score = computed_confidence
+            # Normalize tolerated floating-point variance to the exact deterministic value.
+            brief.confidence_score = computed_confidence
+            brief.priority = constrain_priority(brief.priority, trigger_status)
         return result
     except GeminiConfigurationError:
         raise
