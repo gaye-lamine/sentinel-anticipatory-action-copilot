@@ -229,7 +229,7 @@ async function exportBriefPdf() {
 
 function openAuditModal() { elements.auditModal.classList.remove("hidden"); elements.auditModal.setAttribute("aria-hidden", "false"); loadAuditLogs(); }
 function closeAuditModal() { elements.auditModal.classList.add("hidden"); elements.auditModal.setAttribute("aria-hidden", "true"); }
-function showToast(message, type) { elements.toast.className = `fixed bottom-5 right-5 z-50 rounded-lg border px-4 py-3 text-sm shadow-xl ${type === "success" ? "border-emerald-400/30 bg-emerald-950 text-emerald-100" : "border-red-400/30 bg-red-950 text-red-100"}`; elements.toast.textContent = message; elements.toast.classList.remove("hidden"); window.setTimeout(() => elements.toast.classList.add("hidden"), 4200); }
+function showToast(message, type) { elements.toast.className = `fixed bottom-5 right-5 z-[1100] rounded-lg border px-4 py-3 text-sm shadow-xl ${type === "success" ? "border-emerald-400/30 bg-emerald-950 text-emerald-100" : "border-red-400/30 bg-red-950 text-red-100"}`; elements.toast.textContent = message; elements.toast.classList.remove("hidden"); window.setTimeout(() => elements.toast.classList.add("hidden"), 4200); }
 
 async function bootstrap() {
   initMap();
